@@ -6,7 +6,7 @@ REQUIREMENTS
 
 ## Phase Status
 
-DRAFTING
+REVIEW
 
 ## Last Updated
 
@@ -31,14 +31,27 @@ DRAFTING
 
 ## Context Notes
 
-Key decisions and context for resuming:
+Key decisions made:
 
-- HTTPS VPN - lightweight VPN with national cryptography standards support
-- Must be compatible with xray ecosystem (3x-ui, marzban panels)
-- Minimal new code - leverage certified cryptographic libraries
-- SOCKS5 tunneling approach
-- TLS/HTTPS-like traffic architecture to reduce detection risk
-- Goal: certification-friendly, low attack surface
+1. **Transport**: HTTP/2 CONNECT Proxy over TLS (DECISION-001)
+   - Идентичен браузерному трафику
+   - AI-based DPI не может отличить
+   - RFC 7540 + RFC 7231
+
+2. **xray Compatibility**: Drop-in library replacement (DECISION-002)
+   - Те же имена функций и методов
+   - Тот же JSON конфиг формат
+   - xray-core и клиенты вне скоупа
+
+3. **Code Size**: ~600 LOC target (DECISION-003)
+   - 166x меньше кода чем xray-core
+   - Упрощает сертификацию
+   - Crypto providers отдельно (уже сертифицированы)
+
+4. **National Crypto**: Модульные TDD flows
+   - Phase 1: US, RU, CN
+   - Phase 2: EU, JP, KR
+   - Phase 3: остальные по запросу
 
 ## Fork History
 
@@ -46,6 +59,5 @@ N/A - Original flow
 
 ## Next Actions
 
-1. Draft comprehensive requirements based on user input
-2. Clarify any open questions about architecture
-3. Get requirements approval before moving to specifications
+1. Ожидание "requirements approved" от пользователя
+2. После approval - переход к SPECIFICATIONS фазе

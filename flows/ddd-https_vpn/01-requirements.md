@@ -1,6 +1,6 @@
 # Requirements: HTTPS VPN
 
-> Version: 1.1
+> Version: 1.2
 > Status: DRAFT
 > Last Updated: 2026-03-10
 
@@ -42,24 +42,112 @@
 **I want** минимальную поверхность атаки
 **So that** снизить риски уязвимостей в VPN-решении
 
+## Technical Decisions
+
+### DECISION-001: Transport Protocol
+
+**Выбрано: HTTP/2 CONNECT Proxy over TLS**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Browser (reference)                      │
+├─────────────────────────────────────────────────────────────┤
+│  Client ──TLS 1.3──> HTTP/2 ──CONNECT──> [tunnel data]     │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    HTTPS VPN (implementation)               │
+├─────────────────────────────────────────────────────────────┤
+│  Client ──TLS 1.3──> HTTP/2 ──CONNECT──> [tunnel data]     │
+│          (+ nat'l crypto)                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Обоснование:**
+- Идентичен браузерному HTTPS proxy (RFC 7540 + RFC 7231)
+- AI-based DPI не может отличить - это тот же самый протокол
+- Go stdlib поддерживает из коробки (`net/http` с HTTP/2)
+- Минимум кода: ~600 LOC (без учета crypto providers)
+
+**HTTP/3 (QUIC):** Отложено. HTTP/2 достаточно для MVP.
+
+### DECISION-002: xray-core API Compatibility
+
+**Требование: Drop-in library replacement**
+
+xray-core и его клиенты **вне скоупа** данного проекта. Однако:
+
+1. **Функции и методы** - те же имена что в xray-core
+2. **JSON конфиг** - тот же формат и структура
+3. **Go package API** - совместимые сигнатуры
+
+При замене `import "github.com/xtls/xray-core/..."` на `import "github.com/.../https-vpn/..."` код должен компилироваться без изменений.
+
+**Пример совместимости:**
+
+```go
+// xray-core style config (должен работать as-is)
+{
+  "inbounds": [{
+    "port": 443,
+    "protocol": "vless",
+    "settings": { ... },
+    "streamSettings": {
+      "network": "h2",
+      "security": "tls",
+      "tlsSettings": { ... }
+    }
+  }],
+  "outbounds": [{
+    "protocol": "freedom"
+  }]
+}
+```
+
+### DECISION-003: Code Size Target
+
+**Цель: ~600 LOC нового кода** (без crypto providers)
+
+```
+┌─────────────────────────────────┬────────┬─────────────────┐
+│ Компонент                       │ LOC    │ Сертификация    │
+├─────────────────────────────────┼────────┼─────────────────┤
+│ HTTP/2 CONNECT handler          │ ~80    │ Требуется       │
+│ Bidirectional pipe              │ ~40    │ Требуется       │
+│ TLS config + provider interface │ ~60    │ Требуется       │
+│ xray-compat config parser       │ ~150   │ Требуется       │
+│ Main + CLI                      │ ~50    │ Требуется       │
+│ Client library                  │ ~220   │ Требуется       │
+├─────────────────────────────────┼────────┼─────────────────┤
+│ ИТОГО новый код                 │ ~600   │ ~600 LOC        │
+├─────────────────────────────────┼────────┼─────────────────┤
+│ Go stdlib (net/http, crypto)    │ -      │ Не требуется    │
+│ Crypto providers (GOST, SM)     │ -      │ Уже сертифиц.   │
+│ uTLS (fingerprinting)           │ ~0     │ Опционально     │
+└─────────────────────────────────┴────────┴─────────────────┘
+
+Сравнение: xray-core ~100,000 LOC vs HTTPS VPN ~600 LOC
+Упрощение сертификации: ~166x меньше кода
+```
+
 ## National Cryptography Standards
 
 Каждый криптостандарт реализуется в отдельном TDD flow для модульности и независимой сертификации.
 
 | Страна | ISO | Crypto Org | PKI / Signature | Hash | Symmetric | Browser-compatible transport | TDD Flow |
 |--------|-----|------------|-----------------|------|-----------|------------------------------|----------|
-| 🇺🇸 США | US | National Institute of Standards and Technology | ECDSA / EdDSA | SHA-2 / SHA-3 | AES | TLS 1.3 + HTTP/2/HTTP/3 с параметрами как у Chrome/Firefox (ALPN, cipher order, extensions) | [tdd-crypto-us](../tdd-crypto-us/) |
-| 🇨🇳 Китай | CN | State Cryptography Administration | SM2 | SM3 | SM4 | GMSSL (вариант TLS) с браузероподобным handshake. Используется в китайских браузерах | [tdd-crypto-cn](../tdd-crypto-cn/) |
-| 🇷🇺 Россия | RU | Federal Security Service | GOST R 34.10 | Streebog | Kuznyechik | TLS с GOST cipher suites внутри стандартного HTTPS транспорта | [tdd-crypto-ru](../tdd-crypto-ru/) |
-| 🇰🇷 Южная Корея | KR | Korea Internet & Security Agency | KCDSA | HAS-160 | SEED | TLS стек с SEED cipher suites, совместимый с HTTPS | [tdd-crypto-kr](../tdd-crypto-kr/) |
-| 🇯🇵 Япония | JP | CRYPTREC | ECDSA профили | SHA-2 | Camellia | TLS cipher suites Camellia + стандартный HTTPS стек | [tdd-crypto-jp](../tdd-crypto-jp/) |
-| 🇮🇳 Индия | IN | Standardisation Testing and Quality Certification Directorate | ECSDSA | SHA-2 | AES | TLS-транспорт с ECC профилями, совпадающий с браузерными handshake | [tdd-crypto-in](../tdd-crypto-in/) |
-| 🇪🇺 ЕС | EU | European Telecommunications Standards Institute | Brainpool ECC | SHA-2 | AES | TLS с Brainpool curves, стандартный HTTPS transport | [tdd-crypto-eu](../tdd-crypto-eu/) |
-| 🇫🇷 Франция | FR | Agence nationale de la sécurité des systèmes d'information | ECDSA | SHA-256 | AES | Рекомендуется стандартный TLS без нестандартных протоколов | [tdd-crypto-fr](../tdd-crypto-fr/) |
-| 🇬🇧 Великобритания | GB | National Cyber Security Centre | ECDSA | SHA-2 | AES | TLS 1.3 handshake, идентичный браузерам | [tdd-crypto-gb](../tdd-crypto-gb/) |
-| 🇮🇱 Израиль | IL | Israel National Cyber Directorate | ECC профили | SHA-2 | AES | HTTPS-транспорт с обычным TLS стеком | [tdd-crypto-il](../tdd-crypto-il/) |
-| 🇧🇷 Бразилия | BR | Instituto Nacional de Tecnologia da Informação | ECDSA | SHA-2 | AES | PKI-Brasil поверх стандартного TLS | [tdd-crypto-br](../tdd-crypto-br/) |
-| 🇮🇷 Иран | IR | Iranian National Center for Cyberspace | ECC / RSA | SHA-2 | AES | HTTPS-совместимый TLS стек | [tdd-crypto-ir](../tdd-crypto-ir/) |
+| 🇺🇸 США | US | National Institute of Standards and Technology | ECDSA / EdDSA | SHA-2 / SHA-3 | AES | TLS 1.3 + HTTP/2 с параметрами Chrome/Firefox | [tdd-crypto-us](../tdd-crypto-us/) |
+| 🇨🇳 Китай | CN | State Cryptography Administration | SM2 | SM3 | SM4 | GMSSL (вариант TLS) с браузероподобным handshake | [tdd-crypto-cn](../tdd-crypto-cn/) |
+| 🇷🇺 Россия | RU | Federal Security Service | GOST R 34.10 | Streebog | Kuznyechik | TLS с GOST cipher suites внутри стандартного HTTPS | [tdd-crypto-ru](../tdd-crypto-ru/) |
+| 🇰🇷 Южная Корея | KR | Korea Internet & Security Agency | KCDSA | HAS-160 | SEED | TLS с SEED cipher suites | [tdd-crypto-kr](../tdd-crypto-kr/) |
+| 🇯🇵 Япония | JP | CRYPTREC | ECDSA профили | SHA-2 | Camellia | TLS с Camellia cipher suites | [tdd-crypto-jp](../tdd-crypto-jp/) |
+| 🇮🇳 Индия | IN | Standardisation Testing and Quality Certification Directorate | ECSDSA | SHA-2 | AES | TLS с ECC профилями | [tdd-crypto-in](../tdd-crypto-in/) |
+| 🇪🇺 ЕС | EU | European Telecommunications Standards Institute | Brainpool ECC | SHA-2 | AES | TLS с Brainpool curves | [tdd-crypto-eu](../tdd-crypto-eu/) |
+| 🇫🇷 Франция | FR | Agence nationale de la sécurité des systèmes d'information | ECDSA | SHA-256 | AES | Стандартный TLS | [tdd-crypto-fr](../tdd-crypto-fr/) |
+| 🇬🇧 Великобритания | GB | National Cyber Security Centre | ECDSA | SHA-2 | AES | TLS 1.3 идентичный браузерам | [tdd-crypto-gb](../tdd-crypto-gb/) |
+| 🇮🇱 Израиль | IL | Israel National Cyber Directorate | ECC профили | SHA-2 | AES | HTTPS с обычным TLS | [tdd-crypto-il](../tdd-crypto-il/) |
+| 🇧🇷 Бразилия | BR | Instituto Nacional de Tecnologia da Informação | ECDSA | SHA-2 | AES | PKI-Brasil поверх TLS | [tdd-crypto-br](../tdd-crypto-br/) |
+| 🇮🇷 Иран | IR | Iranian National Center for Cyberspace | ECC / RSA | SHA-2 | AES | HTTPS-совместимый TLS | [tdd-crypto-ir](../tdd-crypto-ir/) |
 
 ### TDD Flows по приоритету
 
@@ -80,124 +168,153 @@
 
 ### Must Have
 
-1. **Given** сервер HTTPS VPN и клиент с поддержкой ГОСТ
+1. **Given** сервер HTTPS VPN настроен с crypto provider
    **When** клиент устанавливает соединение
-   **Then** используются ГОСТ-алгоритмы для шифрования (ГОСТ 34.12-2015, ГОСТ 34.13-2015)
+   **Then** TLS handshake использует алгоритмы выбранного провайдера
 
-2. **Given** сервер HTTPS VPN и клиент с поддержкой SM-алгоритмов
-   **When** клиент устанавливает соединение
-   **Then** используются китайские алгоритмы (SM2, SM3, SM4)
+2. **Given** DPI-система (включая AI-based) анализирует трафик
+   **When** трафик проходит через анализатор
+   **Then** трафик неотличим от браузерного HTTP/2 over TLS
 
-3. **Given** существующая инфраструктура с 3x-ui или marzban
-   **When** xray заменяется на HTTPS VPN
-   **Then** панели управления продолжают работать без модификаций
+3. **Given** существующий xray JSON конфиг
+   **When** используется с HTTPS VPN библиотекой
+   **Then** конфиг парсится и работает без модификаций
 
-4. **Given** DPI-система анализирует трафик HTTPS VPN
-   **When** трафик проходит через DPI
-   **Then** трафик неотличим от стандартного браузерного HTTPS-трафика
+4. **Given** код использующий xray-core API
+   **When** import заменяется на https-vpn
+   **Then** код компилируется без изменений
 
-5. **Given** клиент HTTPS VPN
-   **When** требуется туннелирование произвольного трафика
-   **Then** туннелирование выполняется через SOCKS5 протокол
+5. **Given** HTTP/2 CONNECT запрос от клиента
+   **When** сервер обрабатывает запрос
+   **Then** устанавливается bidirectional tunnel к целевому хосту
 
 ### Should Have
 
-1. Модульная архитектура криптографических провайдеров (см. TDD flows выше)
-2. Использование существующих сертифицированных криптографических библиотек
-3. Полная совместимость с существующими xray-клиентами (v2rayN, v2rayNG, NekoBox, и др.)
+1. Модульная архитектура криптографических провайдеров
+2. uTLS для browser fingerprint имитации
+3. Полная совместимость с панелями 3x-ui, marzban
 
 ### Won't Have (This Iteration)
 
-1. Собственные панели управления (используем существующие)
-2. Собственные клиентские приложения (интеграция в существующие)
-3. Поддержка устаревших протоколов (VMess без TLS)
-4. Новые протоколы маскировки (используем стандартный TLS/HTTPS)
-5. Обфускация трафика сверх TLS
+1. Собственные панели управления
+2. Собственные клиентские приложения
+3. HTTP/3 (QUIC) поддержка
+4. Протоколы VMess/VLESS (только HTTP/2 CONNECT)
+5. Обфускация сверх TLS
+
+## Architecture
+
+### Core Architecture (~600 LOC)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      HTTPS VPN Core                          │
+│                        (~600 LOC)                            │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌────────────────┐  ┌────────────────┐  ┌───────────────┐  │
+│  │ Config Parser  │  │ HTTP/2 Server  │  │ CONNECT       │  │
+│  │ (xray-compat)  │  │ (stdlib)       │  │ Handler       │  │
+│  │ ~150 LOC       │  │ 0 LOC          │  │ ~120 LOC      │  │
+│  └───────┬────────┘  └───────┬────────┘  └───────┬───────┘  │
+│          │                   │                   │          │
+│          v                   v                   v          │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │              Crypto Provider Interface                │  │
+│  │                      (~60 LOC)                        │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                              │                              │
+└──────────────────────────────┼──────────────────────────────┘
+                               │
+         ┌─────────────────────┼─────────────────────┐
+         │                     │                     │
+         v                     v                     v
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  tdd-crypto-us  │  │  tdd-crypto-ru  │  │  tdd-crypto-cn  │
+│  (Go stdlib)    │  │  (GOST libs)    │  │  (SM libs)      │
+│  0 LOC          │  │  adapter only   │  │  adapter only   │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+### Traffic Flow
+
+```
+Client App
+    │
+    │ SOCKS5/HTTP Proxy (local)
+    v
+┌─────────────────┐
+│  HTTPS VPN      │
+│  Client         │
+└────────┬────────┘
+         │
+         │ TLS 1.3 + HTTP/2 (browser-identical)
+         │ CONNECT target.com:443
+         v
+┌─────────────────┐
+│  HTTPS VPN      │
+│  Server         │
+└────────┬────────┘
+         │
+         │ TCP connection
+         v
+    target.com:443
+```
+
+### xray-core API Compatibility
+
+```go
+// Целевая совместимость:
+
+// До (xray-core)
+import "github.com/xtls/xray-core/core"
+server, _ := core.New(config)
+server.Start()
+
+// После (https-vpn) - тот же код работает
+import "github.com/.../https-vpn/core"
+server, _ := core.New(config)
+server.Start()
+```
+
+**Совместимые пакеты:**
+- `core` - основной entry point
+- `common/net` - network utilities
+- `transport/internet` - transport layer
+- `infra/conf` - config parsing
 
 ## Constraints
 
 ### Technical
 
-- **API-совместимость с xray-core**: конфигурационные файлы должны быть совместимы или требовать минимальных изменений
-- **Архитектура трафика**: должна точно соответствовать паттернам браузерного HTTPS/TLS трафика
-- **Криптобиблиотеки**: использовать только сертифицированные/проверенные реализации
-- **Модульность**: криптопровайдеры должны быть независимыми модулями
+- **xray API совместимость**: функции, методы, JSON конфиг - те же имена и структура
+- **~600 LOC лимит**: весь новый код должен укладываться в этот бюджет
+- **Go stdlib**: максимальное использование стандартной библиотеки
+- **HTTP/2 only**: никаких кастомных протоколов
 
 ### Performance
 
-- Производительность не должна быть значительно ниже xray-core
-- Overhead от дополнительного шифрования должен быть минимальным
+- Latency overhead: <5ms на соединение
+- Throughput: не менее 90% от raw TLS
 
 ### Regulatory
 
-- Код должен быть готов к сертификации
-- Минимизация объема кода для ускорения сертификации
-- Четкое разделение криптографических модулей (каждый сертифицируется отдельно)
-
-### Dependencies
-
-- Совместимость с Go runtime (как xray-core)
-- Зависимости от криптобиблиотек определяются в соответствующих TDD flows
-
-## Architecture Principles
-
-### 1. Минимальный код - Максимальное переиспользование
-
-```
-+-------------------------+
-|      HTTPS VPN Core     |  <- Минимальный "клей" код
-+-------------------------+
-            |
-            v
-+-------------------------+
-|   Crypto Provider API   |  <- Единый интерфейс
-+-------------------------+
-     |      |      |
-     v      v      v
-+------+ +------+ +------+
-|  US  | |  RU  | |  CN  |   <- TDD flows (модули)
-| AES  | | GOST | |  SM  |
-+------+ +------+ +------+
-            |
-            v
-+-------------------------+
-|   Standard TLS Stack    |  <- Стандартная TLS-реализация
-+-------------------------+
-            |
-            v
-+-------------------------+
-|    SOCKS5 Tunnel        |  <- Стандартный SOCKS5
-+-------------------------+
-```
-
-### 2. Браузероподобный трафик
-
-- TLS handshake идентичен браузерному
-- HTTP/2 или HTTP/1.1 как в реальных браузерах
-- Паттерны передачи данных соответствуют веб-трафику
-- Валидные сертификаты (не самоподписанные в production)
-
-### 3. Drop-in замена xray
-
-- Совместимость с xray config.json
-- Поддержка VLESS/Trojan over TLS протоколов
-- API для панелей управления
+- Код готов к сертификации (~600 LOC vs ~100,000 LOC)
+- Криптомодули изолированы и заменяемы
+- Четкое разделение: core (~600 LOC) + crypto providers (сертифицированные библиотеки)
 
 ## Open Questions
 
-- [ ] Нужна ли поддержка QUIC (HTTP/3) в первой версии?
-- [ ] Поддержка каких xray-клиентов критична в первую очередь?
-- [ ] Какие страны добавить в Phase 2/3?
+*Все вопросы закрыты в версии 1.2*
 
 ## References
 
 ### Standards
-- ГОСТ 34.10-2018: Цифровая подпись
-- ГОСТ 34.11-2018: Хеш-функции (Streebog)
-- ГОСТ 34.12-2015: Блочные шифры (Kuznyechik)
-- GB/T 32918: SM2 Elliptic Curve Cryptography
-- NIST FIPS 197: AES
+- RFC 7540: HTTP/2
+- RFC 7231: HTTP/1.1 Semantics (CONNECT method)
 - RFC 8446: TLS 1.3
+- ГОСТ 34.10-2018, 34.11-2018, 34.12-2015
+- GB/T 32918: SM2/SM3/SM4
 
 ### Ecosystem
 - xray-core: https://github.com/XTLS/Xray-core
