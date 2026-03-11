@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-SPECIFICATIONS
+IMPLEMENTATION
 
 ## Phase Status
 
-DRAFTING
+IN PROGRESS
 
 ## Last Updated
 
@@ -20,10 +20,10 @@ DRAFTING
 
 - [x] Requirements drafted
 - [x] Requirements approved
-- [ ] Specifications drafted
-- [ ] Specifications approved
-- [ ] Plan drafted
-- [ ] Plan approved
+- [x] Specifications drafted
+- [x] Specifications approved
+- [x] Plan drafted
+- [x] Plan approved
 - [ ] Implementation started
 - [ ] Implementation complete
 - [ ] Documentation drafted
