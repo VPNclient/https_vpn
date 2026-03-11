@@ -1,0 +1,17 @@
+{
+  "inbounds": [{
+    "port": 1080,
+    "protocol": "socks",
+    "settings": {
+      "auth": "noauth",
+      "udp": false
+    }
+  }],
+  "outbounds": [{
+    "protocol": "https-vpn-client",
+    "settings": {
+      "server": "your-domain.com:443",
+      "cryptoProvider": "us"
+    }
+  }]
+}

@@ -1,0 +1,23 @@
+{
+  "inbounds": [{
+    "port": 443,
+    "protocol": "https-vpn",
+    "settings": {},
+    "streamSettings": {
+      "network": "h2",
+      "security": "tls",
+      "tlsSettings": {
+        "serverName": "your-domain.com",
+        "certificates": [{
+          "certificateFile": "/path/to/cert.pem",
+          "keyFile": "/path/to/key.pem"
+        }],
+        "cryptoProvider": "us"
+      }
+    }
+  }],
+  "outbounds": [{
+    "protocol": "freedom",
+    "settings": {}
+  }]
+}
