@@ -39,14 +39,20 @@ AI-based DPI cannot distinguish HTTPS VPN traffic from regular browser traffic b
 
 ## Supported Cryptography Standards
 
-| Country | Standard | Signature | Hash | Cipher | Status |
-|---------|----------|-----------|------|--------|--------|
-| 🇺🇸 USA | NIST | ECDSA | SHA-2 | AES | Phase 1 |
-| 🇷🇺 Russia | GOST | GOST R 34.10 | Streebog | Kuznyechik | Phase 1 |
-| 🇨🇳 China | GM/T | SM2 | SM3 | SM4 | Phase 1 |
-| 🇪🇺 EU | ETSI | Brainpool | SHA-2 | AES | Phase 2 |
-| 🇯🇵 Japan | CRYPTREC | ECDSA | SHA-2 | Camellia | Phase 2 |
-| 🇰🇷 Korea | KISA | KCDSA | HAS-160 | SEED | Phase 2 |
+| Country | Regulatory Body | Signature | Hash | Cipher |
+|---------|-----------------|-----------|------|--------|
+| 🇺🇸 USA | NIST | ECDSA / EdDSA | SHA-2 / SHA-3 | AES |
+| 🇨🇳 China | State Cryptography Administration | SM2 | SM3 | SM4 |
+| 🇷🇺 Russia | FSB | GOST R 34.10 | Streebog | Kuznyechik |
+| 🇰🇷 South Korea | KISA | KCDSA | HAS-160 | SEED |
+| 🇯🇵 Japan | CRYPTREC | ECDSA | SHA-2 | Camellia |
+| 🇮🇳 India | STQC | ECSDSA | SHA-2 | AES |
+| 🇪🇺 EU | ETSI | Brainpool ECC | SHA-2 | AES |
+| 🇫🇷 France | ANSSI | ECDSA | SHA-256 | AES |
+| 🇬🇧 UK | NCSC | ECDSA | SHA-2 | AES |
+| 🇮🇱 Israel | INCD | ECC | SHA-2 | AES |
+| 🇧🇷 Brazil | ITI | ECDSA | SHA-2 | AES |
+| 🇮🇷 Iran | INCC | ECC / RSA | SHA-2 | AES |
 
 ## xray-core Compatibility
 

@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-REQUIREMENTS
+SPECIFICATIONS
 
 ## Phase Status
 
-REVIEW
+DRAFTING
 
 ## Last Updated
 
@@ -19,7 +19,7 @@ REVIEW
 ## Progress
 
 - [x] Requirements drafted
-- [ ] Requirements approved
+- [x] Requirements approved
 - [ ] Specifications drafted
 - [ ] Specifications approved
 - [ ] Plan drafted

@@ -1,7 +1,7 @@
 # Requirements: HTTPS VPN
 
 > Version: 1.2
-> Status: DRAFT
+> Status: APPROVED
 > Last Updated: 2026-03-10
 
 ## Problem Statement
