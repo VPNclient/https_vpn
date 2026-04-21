@@ -24,27 +24,34 @@ type Instance struct {
 }
 
 // getProviderName returns crypto provider name based on TLS config.
-func getProviderName(tlsSettings *conf.TLSConfig) string {
+// It also returns a boolean indicating if the deprecated cryptoProvider field was used.
+func getProviderName(tlsSettings *conf.TLSConfig) (name string, usedDeprecated bool) {
 	if tlsSettings == nil {
-		return "us"
+		return "us", false
 	}
 
 	// 1. Try CipherSuites first (standard xray-compatible way)
-	cs := strings.ToUpper(tlsSettings.CipherSuites)
-	if strings.Contains(cs, "GOST") {
-		return "ru"
-	}
-	if strings.Contains(cs, "SM2") || strings.Contains(cs, "SM3") || strings.Contains(cs, "SM4") {
-		return "cn"
+	// Supports comma-separated list like "ru,TLS_AES_128_GCM_SHA256"
+	if tlsSettings.CipherSuites != "" {
+		parts := strings.Split(tlsSettings.CipherSuites, ",")
+		for _, part := range parts {
+			n := strings.TrimSpace(strings.ToLower(part))
+			if _, ok := crypto.Get(n); ok {
+				return n, false
+			}
+		}
 	}
 
 	// 2. Fallback to deprecated CryptoProvider
 	if tlsSettings.CryptoProvider != "" {
-		return tlsSettings.CryptoProvider
+		n := strings.TrimSpace(strings.ToLower(tlsSettings.CryptoProvider))
+		if _, ok := crypto.Get(n); ok {
+			return n, true
+		}
 	}
 
 	// Default to US
-	return "us"
+	return "us", false
 }
 
 // New creates a new HTTPS VPN instance from config.
@@ -78,7 +85,14 @@ func (i *Instance) Start() error {
 
 	if inbound.StreamSettings != nil && inbound.StreamSettings.TLSSettings != nil {
 		tlsSettings := inbound.StreamSettings.TLSSettings
-		providerName = getProviderName(tlsSettings)
+		var usedDeprecated bool
+		providerName, usedDeprecated = getProviderName(tlsSettings)
+
+		// Log provider selection
+		fmt.Printf("Crypto provider: %s\n", providerName)
+		if usedDeprecated {
+			fmt.Fprintf(os.Stderr, "Warning: cryptoProvider field is deprecated, use cipherSuites instead\n")
+		}
 
 		// Load certificates
 		if len(tlsSettings.Certificates) > 0 {

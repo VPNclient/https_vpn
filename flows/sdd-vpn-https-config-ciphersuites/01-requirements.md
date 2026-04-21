@@ -1,7 +1,7 @@
 # Requirements: Crypto Provider Selection via CipherSuites
 
 > Version: 1.0
-> Status: DRAFT
+> Status: APPROVED
 > Last Updated: 2026-04-21
 
 ## Problem Statement

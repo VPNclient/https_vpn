@@ -34,12 +34,17 @@ type StreamConfig struct {
 
 // TLSConfig configures TLS settings.
 type TLSConfig struct {
-	ServerName     string        `json:"serverName"`
-	Certificates   []CertConfig  `json:"certificates"`
-	CipherSuites   string        `json:"cipherSuites,omitempty"`
-	CryptoProvider string        `json:"cryptoProvider,omitempty"` // deprecated: use CipherSuites
-	MinVersion     string        `json:"minVersion,omitempty"`
-	MaxVersion     string        `json:"maxVersion,omitempty"`
+	ServerName   string       `json:"serverName"`
+	Certificates []CertConfig `json:"certificates"`
+	// CipherSuites serves dual purpose for xray/v2ray GUI compatibility:
+	// 1. Crypto provider selection: "ru" (GOST), "cn" (SM2/SM3/SM4), "us" (RSA/ECDSA)
+	// 2. Standard cipher suite names (ignored if provider identifier found first)
+	// Example: "ru" or "ru,TLS_AES_256_GCM_SHA384" - first valid provider wins.
+	CipherSuites string `json:"cipherSuites,omitempty"`
+	// Deprecated: use CipherSuites with provider identifier instead.
+	CryptoProvider string `json:"cryptoProvider,omitempty"`
+	MinVersion     string `json:"minVersion,omitempty"`
+	MaxVersion     string `json:"maxVersion,omitempty"`
 }
 
 // CertConfig configures a TLS certificate.

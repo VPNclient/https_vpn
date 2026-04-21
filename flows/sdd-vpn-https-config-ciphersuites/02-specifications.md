@@ -1,7 +1,7 @@
 # Specifications: Crypto Provider Selection via CipherSuites
 
 > Version: 1.0
-> Status: DRAFT
+> Status: APPROVED
 > Last Updated: 2026-04-21
 > Requirements: [01-requirements.md](01-requirements.md)
 
