@@ -36,7 +36,8 @@ type StreamConfig struct {
 type TLSConfig struct {
 	ServerName     string        `json:"serverName"`
 	Certificates   []CertConfig  `json:"certificates"`
-	CryptoProvider string        `json:"cryptoProvider,omitempty"` // "us", "ru", "cn", etc.
+	CipherSuites   string        `json:"cipherSuites,omitempty"`
+	CryptoProvider string        `json:"cryptoProvider,omitempty"` // deprecated: use CipherSuites
 	MinVersion     string        `json:"minVersion,omitempty"`
 	MaxVersion     string        `json:"maxVersion,omitempty"`
 }

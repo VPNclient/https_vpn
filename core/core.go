@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/nativemind/https-vpn/crypto"
 	"github.com/nativemind/https-vpn/infra/conf"
@@ -20,6 +21,30 @@ type Instance struct {
 	server   *transport.H2Server
 	ctx      context.Context
 	cancel   context.CancelFunc
+}
+
+// getProviderName returns crypto provider name based on TLS config.
+func getProviderName(tlsSettings *conf.TLSConfig) string {
+	if tlsSettings == nil {
+		return "us"
+	}
+
+	// 1. Try CipherSuites first (standard xray-compatible way)
+	cs := strings.ToUpper(tlsSettings.CipherSuites)
+	if strings.Contains(cs, "GOST") {
+		return "ru"
+	}
+	if strings.Contains(cs, "SM2") || strings.Contains(cs, "SM3") || strings.Contains(cs, "SM4") {
+		return "cn"
+	}
+
+	// 2. Fallback to deprecated CryptoProvider
+	if tlsSettings.CryptoProvider != "" {
+		return tlsSettings.CryptoProvider
+	}
+
+	// Default to US
+	return "us"
 }
 
 // New creates a new HTTPS VPN instance from config.
@@ -49,9 +74,11 @@ func (i *Instance) Start() error {
 
 	// Get TLS settings
 	tlsConfig := &tls.Config{}
+	providerName := "us"
 
 	if inbound.StreamSettings != nil && inbound.StreamSettings.TLSSettings != nil {
 		tlsSettings := inbound.StreamSettings.TLSSettings
+		providerName = getProviderName(tlsSettings)
 
 		// Load certificates
 		if len(tlsSettings.Certificates) > 0 {
@@ -69,23 +96,21 @@ func (i *Instance) Start() error {
 		}
 
 		// Configure crypto provider
-		if tlsSettings.CryptoProvider != "" {
-			provider, ok := crypto.Get(tlsSettings.CryptoProvider)
-			if !ok {
-				return fmt.Errorf("crypto provider not found: %s", tlsSettings.CryptoProvider)
-			}
-			if err := provider.ConfigureTLS(tlsConfig); err != nil {
-				return err
-			}
+		provider, ok := crypto.Get(providerName)
+		if !ok {
+			return fmt.Errorf("crypto provider not found: %s", providerName)
+		}
+		if err := provider.ConfigureTLS(tlsConfig); err != nil {
+			return err
 		}
 	}
 
 	// Create server config
 	serverCfg := &transport.ServerConfig{
-		Addr:         fmt.Sprintf(":%d", inbound.Port),
-		TLSConfig:    tlsConfig,
-		CryptoProvider: inbound.StreamSettings.TLSSettings.CryptoProvider,
-		Handler:      &transport.ConnectHandler{},
+		Addr:           fmt.Sprintf(":%d", inbound.Port),
+		TLSConfig:      tlsConfig,
+		CryptoProvider: providerName,
+		Handler:        &transport.ConnectHandler{},
 	}
 
 	// Create server

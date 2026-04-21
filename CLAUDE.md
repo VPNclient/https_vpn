@@ -83,7 +83,8 @@ Full index with metadata, tags, and relationships: `flows/adr-index.md`
 
 | Name | Status File | Current Phase |
 |------|-------------|---------------|
-| - | No active SDD flows | - |
+| `sdd-https-vpn-openconnect-server-backward-compatibility` | `flows/sdd-https-vpn-openconnect-server-backward-compatibility/_status.md` | REQUIREMENTS (drafting) |
+| `sdd-https-cisco-firmware-compatibility` | `flows/sdd-https-cisco-firmware-compatibility/_status.md` | PLAN (approved) |
 
 ### DDD Flows (Document-Driven)
 
