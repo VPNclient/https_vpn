@@ -4,19 +4,16 @@ package gost
 
 import (
 	"crypto/cipher"
-	"encoding/binary"
 )
 
 const (
 	KuznyechikBlockSize = 16 // 128 bits
 	KuznyechikKeySize   = 32 // 256 bits
-	kuznyechikRounds    = 10
 )
 
 // kuznyechikCipher implements the Kuznyechik block cipher.
 type kuznyechikCipher struct {
-	enc [10][16]byte // round keys for encryption
-	dec [10][16]byte // round keys for decryption
+	ks [10][16]byte // round keys
 }
 
 // NewKuznyechik creates a new Kuznyechik cipher with the given key.
@@ -38,157 +35,148 @@ func (c *kuznyechikCipher) Encrypt(dst, src []byte) {
 	if len(src) < KuznyechikBlockSize || len(dst) < KuznyechikBlockSize {
 		panic("gost: input/output too short")
 	}
-	var block [16]byte
-	copy(block[:], src[:16])
+	var x [16]byte
+	copy(x[:], src[:16])
 
-	// 9 rounds of LSX
 	for i := 0; i < 9; i++ {
-		xorBlocks(&block, &block, &c.enc[i])
-		kuznyechikS(&block)
-		kuznyechikL(&block)
+		for j := 0; j < 16; j++ {
+			x[j] ^= c.ks[i][j]
+		}
+		kuzS(&x)
+		kuzL(&x)
 	}
-	// Final XOR
-	xorBlocks(&block, &block, &c.enc[9])
-	copy(dst[:16], block[:])
+	for j := 0; j < 16; j++ {
+		x[j] ^= c.ks[9][j]
+	}
+	copy(dst[:16], x[:])
 }
 
 func (c *kuznyechikCipher) Decrypt(dst, src []byte) {
 	if len(src) < KuznyechikBlockSize || len(dst) < KuznyechikBlockSize {
 		panic("gost: input/output too short")
 	}
-	var block [16]byte
-	copy(block[:], src[:16])
+	var x [16]byte
+	copy(x[:], src[:16])
 
-	// Inverse: XOR, then 9 rounds of inverse LSX
-	xorBlocks(&block, &block, &c.dec[0])
-	for i := 1; i < 10; i++ {
-		kuznyechikLInv(&block)
-		kuznyechikSInv(&block)
-		xorBlocks(&block, &block, &c.dec[i])
+	for j := 0; j < 16; j++ {
+		x[j] ^= c.ks[9][j]
 	}
-	copy(dst[:16], block[:])
+	for i := 8; i >= 0; i-- {
+		kuzLInv(&x)
+		kuzSInv(&x)
+		for j := 0; j < 16; j++ {
+			x[j] ^= c.ks[i][j]
+		}
+	}
+	copy(dst[:16], x[:])
 }
 
 // expandKey generates round keys from the master key.
 func (c *kuznyechikCipher) expandKey(key []byte) {
-	var k1, k2 [16]byte
-	copy(k1[:], key[:16])
-	copy(k2[:], key[16:])
-
-	copy(c.enc[0][:], k1[:])
-	copy(c.enc[1][:], k2[:])
+	var x, y, z [16]byte
+	copy(x[:], key[:16])
+	copy(y[:], key[16:32])
+	copy(c.ks[0][:], x[:])
+	copy(c.ks[1][:], y[:])
 
 	for i := 0; i < 4; i++ {
-		kuznyechikF(&k1, &k2, &kuznyechikC[i*8+0])
-		kuznyechikF(&k2, &k1, &kuznyechikC[i*8+1])
-		kuznyechikF(&k1, &k2, &kuznyechikC[i*8+2])
-		kuznyechikF(&k2, &k1, &kuznyechikC[i*8+3])
-		kuznyechikF(&k1, &k2, &kuznyechikC[i*8+4])
-		kuznyechikF(&k2, &k1, &kuznyechikC[i*8+5])
-		kuznyechikF(&k1, &k2, &kuznyechikC[i*8+6])
-		kuznyechikF(&k2, &k1, &kuznyechikC[i*8+7])
-		copy(c.enc[2*i+2][:], k1[:])
-		copy(c.enc[2*i+3][:], k2[:])
+		for j := 0; j < 8; j++ {
+			// z = LSX[C](x) where C = L(Vec(8*i + j + 1))
+			// First XOR x with iteration constant C
+			for k := 0; k < 16; k++ {
+				z[k] = x[k] ^ kuzC[8*i+j][k]
+			}
+			kuzS(&z)
+			kuzL(&z)
+			// z = z ^ y, then swap: (x, y) = (z ^ y, x)
+			for k := 0; k < 16; k++ {
+				z[k] ^= y[k]
+			}
+			copy(y[:], x[:])
+			copy(x[:], z[:])
+		}
+		copy(c.ks[2*i+2][:], x[:])
+		copy(c.ks[2*i+3][:], y[:])
 	}
-
-	// Generate decryption keys (apply L to encryption keys)
-	copy(c.dec[0][:], c.enc[9][:])
-	for i := 1; i < 9; i++ {
-		var tmp [16]byte
-		copy(tmp[:], c.enc[9-i][:])
-		kuznyechikLInv(&tmp)
-		copy(c.dec[i][:], tmp[:])
-	}
-	copy(c.dec[9][:], c.enc[0][:])
 }
 
-// kuznyechikF is the Feistel function used in key schedule.
-func kuznyechikF(k1, k2 *[16]byte, c *[16]byte) {
-	var tmp [16]byte
-	xorBlocks(&tmp, k1, c)
-	kuznyechikS(&tmp)
-	kuznyechikL(&tmp)
-	xorBlocks(k1, &tmp, k2)
-	copy(k2[:], tmp[:])
+// kuzC contains precomputed iteration constants: C[i] = L(Vec(i+1))
+var kuzC [32][16]byte
+
+func init() {
+	for i := 0; i < 32; i++ {
+		var v [16]byte
+		v[15] = byte(i + 1)
+		kuzL(&v)
+		kuzC[i] = v
+	}
 }
 
-// kuznyechikS applies the S-box (Pi) substitution.
-func kuznyechikS(block *[16]byte) {
+// S-box substitution
+func kuzS(x *[16]byte) {
 	for i := 0; i < 16; i++ {
-		block[i] = kuznyechikPi[block[i]]
+		x[i] = kuzPi[x[i]]
 	}
 }
 
-// kuznyechikSInv applies the inverse S-box substitution.
-func kuznyechikSInv(block *[16]byte) {
+// Inverse S-box substitution
+func kuzSInv(x *[16]byte) {
 	for i := 0; i < 16; i++ {
-		block[i] = kuznyechikPiInv[block[i]]
+		x[i] = kuzPiInv[x[i]]
 	}
 }
 
-// kuznyechikL applies the linear transformation.
-func kuznyechikL(block *[16]byte) {
+// Linear transformation L = R^16
+func kuzL(x *[16]byte) {
 	for i := 0; i < 16; i++ {
-		kuznyechikR(block)
+		kuzR(x)
 	}
 }
 
-// kuznyechikLInv applies the inverse linear transformation.
-func kuznyechikLInv(block *[16]byte) {
+// Inverse linear transformation
+func kuzLInv(x *[16]byte) {
 	for i := 0; i < 16; i++ {
-		kuznyechikRInv(block)
+		kuzRInv(x)
 	}
 }
 
-// kuznyechikR is the R transformation (one step of L).
-func kuznyechikR(block *[16]byte) {
-	var sum byte
+// R transformation
+func kuzR(x *[16]byte) {
+	var s byte
 	for i := 0; i < 16; i++ {
-		sum ^= gfMul(block[i], kuznyechikLVec[i])
+		s ^= kuzGFMul(x[i], kuzLCoef[i])
 	}
-	// Shift right and insert sum at position 0
-	copy(block[1:], block[:15])
-	block[0] = sum
+	copy(x[1:], x[:15])
+	x[0] = s
 }
 
-// kuznyechikRInv is the inverse R transformation.
-func kuznyechikRInv(block *[16]byte) {
-	var sum byte
-	t := block[0]
-	copy(block[:15], block[1:])
-	block[15] = t
+// Inverse R transformation
+func kuzRInv(x *[16]byte) {
+	var s byte
+	t := x[0]
+	copy(x[:15], x[1:])
+	x[15] = t
 	for i := 0; i < 16; i++ {
-		sum ^= gfMul(block[i], kuznyechikLVec[i])
+		s ^= kuzGFMul(x[i], kuzLCoef[i])
 	}
-	block[15] = sum
+	x[15] = s
 }
 
-// gfMul multiplies two elements in GF(2^8) with polynomial x^8 + x^7 + x^6 + x + 1.
-func gfMul(a, b byte) byte {
-	var result byte
-	for b != 0 {
+// GF(2^8) multiplication with polynomial x^8 + x^7 + x^6 + x + 1
+func kuzGFMul(a, b byte) byte {
+	var p byte
+	for i := 0; i < 8; i++ {
 		if b&1 != 0 {
-			result ^= a
+			p ^= a
 		}
 		hi := a & 0x80
 		a <<= 1
 		if hi != 0 {
-			a ^= 0xC3 // x^8 + x^7 + x^6 + x + 1 = 0x1C3, low byte is 0xC3
+			a ^= 0xC3 // reduction polynomial
 		}
 		b >>= 1
 	}
-	return result
-}
-
-// xorBlocks XORs two 16-byte blocks.
-func xorBlocks(dst, a, b *[16]byte) {
-	// Use uint64 for efficiency
-	a0 := binary.LittleEndian.Uint64(a[:8])
-	a1 := binary.LittleEndian.Uint64(a[8:])
-	b0 := binary.LittleEndian.Uint64(b[:8])
-	b1 := binary.LittleEndian.Uint64(b[8:])
-	binary.LittleEndian.PutUint64(dst[:8], a0^b0)
-	binary.LittleEndian.PutUint64(dst[8:], a1^b1)
+	return p
 }
 
 // KeySizeError is returned when key size is invalid.
@@ -198,8 +186,8 @@ func (k KeySizeError) Error() string {
 	return "gost: invalid key size"
 }
 
-// kuznyechikPi is the S-box from GOST R 34.12-2015.
-var kuznyechikPi = [256]byte{
+// S-box Pi from GOST R 34.12-2015
+var kuzPi = [256]byte{
 	0xFC, 0xEE, 0xDD, 0x11, 0xCF, 0x6E, 0x31, 0x16, 0xFB, 0xC4, 0xFA, 0xDA, 0x23, 0xC5, 0x04, 0x4D,
 	0xE9, 0x77, 0xF0, 0xDB, 0x93, 0x2E, 0x99, 0xBA, 0x17, 0x36, 0xF1, 0xBB, 0x14, 0xCD, 0x5F, 0xC1,
 	0xF9, 0x18, 0x65, 0x5A, 0xE2, 0x5C, 0xEF, 0x21, 0x81, 0x1C, 0x3C, 0x42, 0x8B, 0x01, 0x8E, 0x4F,
@@ -218,8 +206,8 @@ var kuznyechikPi = [256]byte{
 	0x59, 0xA6, 0x74, 0xD2, 0xE6, 0xF4, 0xB4, 0xC0, 0xD1, 0x66, 0xAF, 0xC2, 0x39, 0x4B, 0x63, 0xB6,
 }
 
-// kuznyechikPiInv is the inverse S-box.
-var kuznyechikPiInv = [256]byte{
+// Inverse S-box
+var kuzPiInv = [256]byte{
 	0xA5, 0x2D, 0x32, 0x8F, 0x0E, 0x30, 0x38, 0xC0, 0x54, 0xE6, 0x9E, 0x39, 0x55, 0x7E, 0x52, 0x91,
 	0x64, 0x03, 0x57, 0x5A, 0x1C, 0x60, 0x07, 0x18, 0x21, 0x72, 0xA8, 0xD1, 0x29, 0xC6, 0xA4, 0x3F,
 	0xE0, 0x27, 0x8D, 0x0C, 0x82, 0xEA, 0xAE, 0xB4, 0x9A, 0x63, 0x49, 0xE5, 0x42, 0xE4, 0x15, 0xB7,
@@ -238,21 +226,8 @@ var kuznyechikPiInv = [256]byte{
 	0x12, 0x1A, 0x48, 0x68, 0xF5, 0x81, 0x8B, 0xC7, 0xD6, 0x20, 0x0A, 0x08, 0x00, 0x4C, 0xD7, 0x74,
 }
 
-// kuznyechikLVec is the vector for linear transformation L.
-var kuznyechikLVec = [16]byte{
+// Linear transformation coefficients
+var kuzLCoef = [16]byte{
 	0x94, 0x20, 0x85, 0x10, 0xC2, 0xC0, 0x01, 0xFB,
 	0x01, 0xC0, 0xC2, 0x10, 0x85, 0x20, 0x94, 0x01,
-}
-
-// kuznyechikC contains the iteration constants for key schedule.
-var kuznyechikC [32][16]byte
-
-func init() {
-	// Generate iteration constants C[i] = L(i+1)
-	for i := 0; i < 32; i++ {
-		var c [16]byte
-		c[15] = byte(i + 1)
-		kuznyechikL(&c)
-		kuznyechikC[i] = c
-	}
 }

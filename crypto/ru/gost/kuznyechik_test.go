@@ -60,8 +60,8 @@ func TestKuznyechikInvalidKeySize(t *testing.T) {
 func TestKuznyechikSBox(t *testing.T) {
 	// Verify S-box and inverse are consistent
 	for i := 0; i < 256; i++ {
-		s := kuznyechikPi[i]
-		inv := kuznyechikPiInv[s]
+		s := kuzPi[i]
+		inv := kuzPiInv[s]
 		if byte(i) != inv {
 			t.Errorf("S-box inconsistent at %d: Pi[%d]=%d, PiInv[%d]=%d", i, i, s, s, inv)
 		}
@@ -73,8 +73,8 @@ func TestKuznyechikLTransform(t *testing.T) {
 	original := [16]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 		0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10}
 	block := original
-	kuznyechikL(&block)
-	kuznyechikLInv(&block)
+	kuzL(&block)
+	kuzLInv(&block)
 	if block != original {
 		t.Errorf("L transform not invertible:\ngot:  %x\nwant: %x", block, original)
 	}
@@ -84,14 +84,14 @@ func TestGFMul(t *testing.T) {
 	// Test GF multiplication properties
 	// a * 1 = a
 	for a := 0; a < 256; a++ {
-		if gfMul(byte(a), 1) != byte(a) {
-			t.Errorf("gfMul(%d, 1) = %d, want %d", a, gfMul(byte(a), 1), a)
+		if kuzGFMul(byte(a), 1) != byte(a) {
+			t.Errorf("gfMul(%d, 1) = %d, want %d", a, kuzGFMul(byte(a), 1), a)
 		}
 	}
 	// a * 0 = 0
 	for a := 0; a < 256; a++ {
-		if gfMul(byte(a), 0) != 0 {
-			t.Errorf("gfMul(%d, 0) = %d, want 0", a, gfMul(byte(a), 0))
+		if kuzGFMul(byte(a), 0) != 0 {
+			t.Errorf("gfMul(%d, 0) = %d, want 0", a, kuzGFMul(byte(a), 0))
 		}
 	}
 }
