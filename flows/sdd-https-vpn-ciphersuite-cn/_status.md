@@ -6,7 +6,7 @@ IMPLEMENTATION
 
 ## Phase Status
 
-IN PROGRESS
+PARTIAL COMPLETE (SM9 deferred)
 
 ## Last Updated
 
@@ -25,7 +25,7 @@ IN PROGRESS
 - [x] Plan drafted
 - [x] Plan approved
 - [x] Implementation started
-- [ ] Implementation complete
+- [x] Implementation complete (core: SM2/SM3/SM4, SM9 deferred)
 
 ## Context Notes
 
@@ -50,5 +50,5 @@ N/A - New flow
 
 ## Next Actions
 
-1. Get plan approved ("plan approved")
-2. Begin implementation phase
+1. (Optional) Implement SM9 (BN256 pairings) for identity-based crypto
+2. Use provider with `cipherSuites: "cn"` in config
