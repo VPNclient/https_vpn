@@ -20,8 +20,8 @@
 | Phase | Estimated | Actual | Status |
 |-------|-----------|--------|--------|
 | Design | 2026-04-22 | 2026-04-22 | DONE |
-| Implementation | 2026-04-23 | - | TODO |
-| Testing | 2026-04-23 | - | TODO |
+| Implementation | 2026-04-23 | 2026-04-22 | DONE |
+| Testing | 2026-04-23 | 2026-04-22 | IN_PROGRESS |
 
 ## Key Decisions
 
