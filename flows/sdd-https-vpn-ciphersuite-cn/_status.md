@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-REQUIREMENTS
+IMPLEMENTATION
 
 ## Phase Status
 
-DRAFTING
+IN PROGRESS
 
 ## Last Updated
 
@@ -18,13 +18,13 @@ DRAFTING
 
 ## Progress
 
-- [ ] Requirements drafted
-- [ ] Requirements approved
-- [ ] Specifications drafted
-- [ ] Specifications approved
-- [ ] Plan drafted
-- [ ] Plan approved
-- [ ] Implementation started
+- [x] Requirements drafted
+- [x] Requirements approved
+- [x] Specifications drafted
+- [x] Specifications approved
+- [x] Plan drafted
+- [x] Plan approved
+- [x] Implementation started
 - [ ] Implementation complete
 
 ## Context Notes
@@ -37,6 +37,12 @@ Key decisions and context for resuming:
 - Algorithms: SM2 (signatures), SM3 (hash), SM4 (symmetric encryption), SM9 (identity-based crypto)
 - TLS cipher suites: TLS_SM4_GCM_SM3, TLS_SM4_CCM_SM3 (all per RFC 8998)
 - Part of the crypto provider system defined in `crypto/provider.go`
+- SM2 curve: Only standard SM2-P256
+
+## Related Flows
+
+- `sdd-https-vpn-multi-cert` - Multi-provider certificate selection (parallel)
+- `sdd-vpn-https-config-ciphersuites` - Provider selection (complete)
 
 ## Fork History
 
@@ -44,6 +50,5 @@ N/A - New flow
 
 ## Next Actions
 
-1. Elicit detailed requirements from user
-2. Define scope and constraints
-3. Get requirements approved
+1. Get plan approved ("plan approved")
+2. Begin implementation phase

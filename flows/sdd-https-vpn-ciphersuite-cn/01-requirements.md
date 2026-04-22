@@ -1,7 +1,7 @@
 # Requirements: Chinese National Cryptography (SM Series)
 
 > Version: 1.0
-> Status: DRAFT
+> Status: APPROVED
 > Last Updated: 2026-04-22
 
 ## Problem Statement
@@ -78,6 +78,7 @@
 - Certificate generation tooling (use external tools)
 - Backward compatibility with non-SM clients on SM-configured servers
 - SM9 key distribution infrastructure (KGC - Key Generation Center)
+- Multi-provider certificate selection (see: `sdd-https-vpn-multi-cert`)
 
 ## Constraints
 
@@ -88,10 +89,10 @@
 
 ## Open Questions
 
-- [ ] Какие конкретные эллиптические кривые SM2 нужны? (SM2-P256 standard? Others?)
+- [x] Какие конкретные эллиптические кривые SM2 нужны? → **Только стандартная SM2-P256**
 - [x] Нужна ли поддержка SM9 (identity-based encryption)? → **Да, нужна**
 - [x] Какие TLS cipher suites нужны? → **Все (TLS_SM4_GCM_SM3, TLS_SM4_CCM_SM3)**
-- [ ] Нужна ли поддержка двойного сертификата (SM2 + RSA)?
+- [x] Нужна ли поддержка двойного сертификата (SM2 + RSA)? → **Отдельный flow: `sdd-https-vpn-multi-cert`**
 
 ## References
 
