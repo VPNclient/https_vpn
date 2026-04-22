@@ -15,6 +15,7 @@ type InboundConfig struct {
 	Settings       json.RawMessage `json:"settings"`
 	StreamSettings *StreamConfig   `json:"streamSettings"`
 	Tag            string          `json:"tag,omitempty"`
+	OcservBackend  string          `json:"ocservBackend,omitempty"`
 	Sniffing       *SniffingConfig `json:"sniffing,omitempty"`
 }
 

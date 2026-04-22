@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 
@@ -124,7 +125,7 @@ func (i *Instance) Start() error {
 		Addr:           fmt.Sprintf(":%d", inbound.Port),
 		TLSConfig:      tlsConfig,
 		CryptoProvider: providerName,
-		Handler:        &transport.ConnectHandler{},
+		Handler:        getHandler(inbound, &transport.ConnectHandler{}),
 	}
 
 	// Create server
@@ -157,4 +158,14 @@ func (i *Instance) Close() error {
 	}
 
 	return nil
+}
+
+func getHandler(inbound conf.InboundConfig, next http.Handler) http.Handler {
+	if inbound.OcservBackend != "" {
+		return &transport.AnyConnectHandler{
+			BackendAddr: inbound.OcservBackend,
+			Next:        next,
+		}
+	}
+	return next
 }
