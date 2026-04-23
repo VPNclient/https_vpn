@@ -95,14 +95,17 @@ func (i *Instance) Start() error {
 			fmt.Fprintf(os.Stderr, "Warning: cryptoProvider field is deprecated, use cipherSuites instead\n")
 		}
 
-		// Load certificates
+		// Load certificates with automatic provider-based selection
 		if len(tlsSettings.Certificates) > 0 {
-			cert := tlsSettings.Certificates[0]
-			certPair, err := tls.LoadX509KeyPair(cert.CertificateFile, cert.KeyFile)
+			priority := crypto.ParseProviderPriority(tlsSettings.CipherSuites)
+			certStore, err := crypto.NewCertificateStore(tlsSettings.Certificates, priority)
 			if err != nil {
-				return fmt.Errorf("failed to load certificate: %w", err)
+				return fmt.Errorf("failed to load certificates: %w", err)
 			}
-			tlsConfig.Certificates = []tls.Certificate{certPair}
+			// Set callback for dynamic certificate selection
+			tlsConfig.GetCertificate = certStore.GetCertificate
+			// Also populate Certificates for clients that don't trigger callback
+			tlsConfig.Certificates = certStore.AllCertificates()
 		}
 
 		// Set SNI
