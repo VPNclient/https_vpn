@@ -1,7 +1,7 @@
 # Requirements: European Cryptography (Brainpool ECC)
 
-> Version: 1.0
-> Status: DRAFT
+> Version: 1.1
+> Status: APPROVED
 > Last Updated: 2026-04-22
 
 ## Problem Statement
@@ -75,9 +75,9 @@
 
 ## Open Questions
 
-- [ ] Какие конкретно кривые Brainpool наиболее востребованы? (P256r1, P384r1, P512r1?)
-- [ ] Требуется ли поддержка Brainpool в TLS 1.2 или только в TLS 1.3?
-- [ ] Есть ли необходимость в специфических для ЕС TLS Cipher Suites, или достаточно стандартных с Brainpool curves?
+- **[x] Кривые Brainpool**: Поддержка всех основных кривых: P256r1, P384r1, P512r1.
+- **[x] Версии TLS**: Поддержка TLS 1.2 и TLS 1.3.
+- **[x] Шифры TLS**: Достаточно стандартных AES-GCM с кривыми Brainpool.
 
 ## References
 
@@ -90,6 +90,6 @@
 
 ## Approval
 
-- [ ] Reviewed by:
-- [ ] Approved on:
-- [ ] Notes:
+- Reviewed by: User
+- Approved on: 2026-04-22
+- Notes: User confirmed choices for curves, TLS versions, and cipher suites.
