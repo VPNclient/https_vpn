@@ -110,7 +110,8 @@ func (p *Poly) Sub(a, b *Poly) {
 // BaseMul множить два поліноми в NTT домені (базове множення)
 func (p *Poly) BaseMul(a, b *Poly) {
 	for i := 0; i < N/2; i++ {
-		zeta := int32(zetas[64+i])
+		// Використовуємо zeta з таблиці (індекс mod 128)
+		zeta := int32(zetas[i%128])
 
 		// Множення пари коефіцієнтів
 		a0, a1 := int32(a[2*i]), int32(a[2*i+1])
