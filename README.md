@@ -14,17 +14,17 @@ A lightweight, certification-ready VPN that uses standard HTTP/2 CONNECT over TL
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    HTTPS VPN (~600 LOC)                     │
-├─────────────────────────────────────────────────────────────┤
-│  Config Parser    │  HTTP/2 Server   │  CONNECT Handler    │
-│  (xray-compat)    │  (Go stdlib)     │                     │
-├─────────────────────────────────────────────────────────────┤
-│                  Crypto Provider Interface                  │
-├──────────────┬──────────────┬──────────────┬───────────────┤
-│  US (AES)    │  RU (GOST)   │  CN (SM)     │  ...          │
-│  stdlib      │  certified   │  certified   │               │
-└──────────────┴──────────────┴──────────────┴───────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                       HTTPS VPN (~600 LOC)                          │
+├─────────────────────────────────────────────────────────────────────┤
+│  Config Parser      │  HTTP/2 Server     │  CONNECT Handler        │
+│  (xray-compat)      │  (Go stdlib)       │                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                    Crypto Provider Interface                        │
+├────────────┬────────────┬────────────┬────────────┬────────────────┤
+│  US (AES)  │  CN (SM)   │  UA (ДСТУ) │  FR (ANSSI)│  UK (NCSC)     │
+│  stdlib    │  SM2/3/4   │  PQ-ready  │  certified │  compliant     │
+└────────────┴────────────┴────────────┴────────────┴────────────────┘
 ```
 
 ## Traffic Pattern
@@ -39,20 +39,32 @@ AI-based DPI cannot distinguish HTTPS VPN traffic from regular browser traffic b
 
 ## Supported Cryptography Standards
 
-| Country | Regulatory Body | Signature | Hash | Cipher |
-|---------|-----------------|-----------|------|--------|
-| 🇺🇸 USA | NIST | ECDSA / EdDSA | SHA-2 / SHA-3 | AES |
-| 🇨🇳 China | State Cryptography Administration | SM2 | SM3 | SM4 |
-| 🇷🇺 Russia | FSB | GOST R 34.10 | Streebog | Kuznyechik |
-| 🇰🇷 South Korea | KISA | KCDSA | HAS-160 | SEED |
-| 🇯🇵 Japan | CRYPTREC | ECDSA | SHA-2 | Camellia |
-| 🇮🇳 India | STQC | ECSDSA | SHA-2 | AES |
-| 🇪🇺 EU | ETSI | Brainpool ECC | SHA-2 | AES |
-| 🇫🇷 France | ANSSI | ECDSA | SHA-256 | AES |
-| 🇬🇧 UK | NCSC | ECDSA | SHA-2 | AES |
-| 🇮🇱 Israel | INCD | ECC | SHA-2 | AES |
-| 🇧🇷 Brazil | ITI | ECDSA | SHA-2 | AES |
-| 🇮🇷 Iran | INCC | ECC / RSA | SHA-2 | AES |
+| Country | Regulatory Body | Signature | Hash | Cipher | Status |
+|---------|-----------------|-----------|------|--------|--------|
+| 🇺🇸 USA | NIST | ECDSA / EdDSA | SHA-2 / SHA-3 | AES | ✅ |
+| 🇨🇳 China | State Cryptography Administration | SM2 | SM3 | SM4, SM9 | ✅ |
+| 🇺🇦 Ukraine | ДСТУ | Сокіл (Sokil) | Купина (Kupyna) | Калина (Kalyna) | ✅ |
+| 🇷🇺 Russia | FSB | GOST R 34.10 | Streebog | Kuznyechik | 🔄 |
+| 🇰🇷 South Korea | KISA | KCDSA | HAS-160 | SEED | 📋 |
+| 🇯🇵 Japan | CRYPTREC | ECDSA | SHA-2 | Camellia | 📋 |
+| 🇮🇳 India | STQC | ECSDSA | SHA-2 | AES | 📋 |
+| 🇪🇺 EU | ETSI | Brainpool ECC | SHA-2 | AES | 📋 |
+| 🇫🇷 France | ANSSI | ECDSA | SHA-256 | AES | ✅ |
+| 🇬🇧 UK | NCSC | ECDSA | SHA-2 | AES (NCSC Compliant) | ✅ |
+| 🇮🇱 Israel | INCD | ECC | SHA-2 | AES | 📋 |
+| 🇧🇷 Brazil | ITI | ECDSA | SHA-2 | AES | 📋 |
+| 🇮🇷 Iran | INCC | ECC / RSA | SHA-2 | AES | 📋 |
+
+Legend: ✅ Implemented | 🔄 In Progress | 📋 Planned
+
+### Post-Quantum Cryptography
+
+| Country | Standard | KEM | Signature | Security Level |
+|---------|----------|-----|-----------|----------------|
+| 🇺🇦 Ukraine | ДСТУ-ПК 2026 | Мальва (Malva) | Сокіл (Sokil) | Category 5 (256-bit) |
+| 🇺🇸 USA | NIST FIPS 203/204 | ML-KEM | ML-DSA | Category 5 |
+
+Ukrainian post-quantum algorithms are based on lattice cryptography (Module-LWE/SIS), providing resistance against quantum computer attacks.
 
 ## xray-core Compatibility
 
@@ -110,8 +122,11 @@ Compatible with management panels: **3x-ui**, **Marzban**, and xray-based applic
 ### Server
 
 ```bash
-# Generate config
+# Generate config (US crypto - default)
 https-vpn init --crypto us
+
+# Generate config (Ukrainian post-quantum)
+https-vpn init --crypto ua
 
 # Run server
 https-vpn run -c config.json
@@ -126,17 +141,38 @@ https-vpn client -s server.example.com:443 -l 127.0.0.1:1080
 
 Local SOCKS5 proxy available at `127.0.0.1:1080`.
 
+### Crypto Provider Selection
+
+```json
+{
+  "tlsSettings": {
+    "cipherSuites": "ua"
+  }
+}
+```
+
+Available providers: `us`, `cn`, `ua`, `fr`, `uk`
+
 ## Building
 
 ```bash
 # Default (US crypto - Go stdlib)
 go build -o https-vpn ./cmd/https-vpn
 
-# With GOST support
+# With GOST support (Russia)
 go build -tags gost -o https-vpn ./cmd/https-vpn
 
-# With SM support
+# With SM support (China)
 go build -tags sm -o https-vpn ./cmd/https-vpn
+
+# With UK support (NCSC)
+go build -tags uk -o https-vpn ./cmd/https-vpn
+
+# With UA support (Ukraine, post-quantum)
+go build -tags ua -o https-vpn ./cmd/https-vpn
+
+# With FR support (France, ANSSI)
+go build -tags fr -o https-vpn ./cmd/https-vpn
 ```
 
 ## Project Structure
@@ -148,7 +184,15 @@ https-vpn/
 ├── crypto/               # Crypto provider interface
 │   ├── us/               # NIST (Go stdlib)
 │   ├── ru/               # GOST provider
-│   └── cn/               # SM provider
+│   ├── cn/               # SM provider (SM2/SM3/SM4/SM9)
+│   ├── uk/               # NCSC provider
+│   ├── fr/               # ANSSI provider
+│   └── ua/               # ДСТУ provider (post-quantum)
+│       ├── kupyna/       # Купина-512 hash
+│       ├── kalyna/       # Калина-512 cipher
+│       ├── malva/        # Мальва-1024 KEM
+│       ├── sokil/        # Сокіл-512 signature
+│       └── tls/          # TLS cipher suites
 ├── infra/conf/           # Config parsing (xray-compatible)
 └── cmd/https-vpn/        # CLI
 ```
@@ -166,6 +210,15 @@ https-vpn/
 - [Requirements](flows/ddd-https_vpn/01-requirements.md) — detailed requirements and decisions
 - [Specifications](flows/ddd-https_vpn/02-specifications.md) — technical specifications
 - [Implementation Plan](flows/ddd-https_vpn/03-plan.md) — development roadmap
+
+### Crypto Providers
+
+| Provider | Documentation | Standards |
+|----------|---------------|-----------|
+| UA (Ukraine) | [crypto/ua/README.md](crypto/ua/README.md) | ДСТУ 7564, ДСТУ 7624, ДСТУ-ПК 2026 |
+| CN (China) | [crypto/cn/README.md](crypto/cn/README.md) | GB/T 32918, GB/T 32905, GB/T 32907 |
+| FR (France) | [crypto/fr/README.md](crypto/fr/README.md) | ANSSI RGS |
+| UK (Britain) | [crypto/uk/README.md](crypto/uk/README.md) | NCSC Guidelines |
 
 ## License
 
