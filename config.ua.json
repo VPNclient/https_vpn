@@ -1,0 +1,29 @@
+{
+  "server": {
+    "listen": ":443",
+    "hostname": "vpn.example.ua"
+  },
+  "tlsSettings": {
+    "cipherSuites": "ua",
+    "minVersion": "1.3",
+    "maxVersion": "1.3",
+    "certificates": [
+      {
+        "certificateFile": "samples/server.crt",
+        "keyFile": "samples/server.key"
+      }
+    ]
+  },
+  "crypto": {
+    "provider": "ua",
+    "description": "Українська постквантова криптографія (ДСТУ-ПК 2026)",
+    "algorithms": {
+      "kem": "Malva-1024 (X25519 hybrid)",
+      "signature": "Sokil-512",
+      "cipher": "Kalyna-512-GCM",
+      "hash": "Kupyna-512"
+    },
+    "securityLevel": 256,
+    "postQuantum": true
+  }
+}

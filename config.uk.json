@@ -1,0 +1,49 @@
+{
+  "inbounds": [{
+    "port": 443,
+    "protocol": "https-vpn",
+    "settings": {},
+    "streamSettings": {
+      "network": "h2",
+      "security": "tls",
+      "tlsSettings": {
+        "cipherSuites": "uk",
+        "certificates": [{
+          "certificateFile": "samples/server.crt",
+          "keyFile": "samples/server.key"
+        }]
+      }
+    }
+  }],
+  "outbounds": [{"protocol": "freedom"}],
+  "dns": {
+    "servers": ["8.8.8.8"]
+  },
+  "log": {
+    "loglevel": "warning"
+  },
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "outboundTag": "freedom",
+        "domain": []
+      }
+    ]
+  },
+  "policy": {
+    "levels": {
+      "0": {
+        "handshake": 1,
+        "connIdle": 300,
+        "uplinkOnly": 2,
+        "downlinkOnly": 2,
+        "bufferSize": 3,
+        "domainStrategy": "AsIs",
+        "redirectUdp": false
+      }
+    }
+  },
+  "inboundDetour": [],
+  "outboundDetour": []
+}

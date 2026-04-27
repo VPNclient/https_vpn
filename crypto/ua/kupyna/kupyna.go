@@ -135,31 +135,47 @@ func (d *Digest) Sum(in []byte) []byte {
 // finalize завершує обчислення хешу
 func (d *Digest) finalize() []byte {
 	blockSize := d.BlockSize()
+	msgBits := d.msgLen << 3
 
-	// Додаємо padding
-	padLen := blockSize - 12 - d.bufLen
-	if padLen <= 0 {
-		padLen += blockSize
+	// Додаємо 0x80
+	d.buf[d.bufLen] = 0x80
+	d.bufLen++
+
+	// Визначаємо скільки нулів потрібно
+	// Потрібно місце для 12 байт довжини в кінці блоку
+	padLen := blockSize - d.bufLen - 12
+	if padLen < 0 {
+		// Не влізає в цей блок, заповнюємо нулями і обробляємо
+		for i := d.bufLen; i < blockSize; i++ {
+			d.buf[i] = 0
+		}
+		d.processBlock(d.buf[:blockSize])
+		d.bufLen = 0
+		padLen = blockSize - 12
 	}
 
-	// Padding: 0x80 || 0x00... || length (96 біт)
-	padding := make([]byte, padLen+12)
-	padding[0] = 0x80
-	// Довжина повідомлення в бітах (96 біт = 12 байт)
-	msgBits := d.msgLen << 3
-	binary.LittleEndian.PutUint64(padding[padLen:], msgBits)
-	binary.LittleEndian.PutUint32(padding[padLen+8:], 0)
+	// Заповнюємо нулями до поля довжини
+	for i := 0; i < padLen; i++ {
+		d.buf[d.bufLen+i] = 0
+	}
+	d.bufLen += padLen
 
-	d.Write(padding)
+	// Додаємо довжину (96 біт = 12 байт, Little-Endian)
+	binary.LittleEndian.PutUint64(d.buf[d.bufLen:], msgBits)
+	binary.LittleEndian.PutUint32(d.buf[d.bufLen+8:], 0)
+	d.bufLen += 12
+
+	// Обробляємо останній блок
+	d.processBlock(d.buf[:blockSize])
 
 	// Фінальне перетворення
 	d.outputTransform()
 
 	// Вибираємо праву половину стану
 	result := make([]byte, d.size)
-	offset := (d.cols - d.size/8) * 8
+	offset := d.cols - d.size/8
 	for i := 0; i < d.size/8; i++ {
-		binary.LittleEndian.PutUint64(result[i*8:], d.state[offset/8+i])
+		binary.LittleEndian.PutUint64(result[i*8:], d.state[offset+i])
 	}
 
 	return result
@@ -225,10 +241,10 @@ func (d *Digest) roundQ(state []uint64) []uint64 {
 	copy(result, state)
 
 	for r := 0; r < d.rounds; r++ {
-		// AddRoundConstant для Q
+		// AddRoundConstant для Q: 0x((c-1-i)<<4 ^ r)F0F0F0F0F0F0F3
 		for i := 0; i < d.cols; i++ {
-			// Q використовує інші константи
-			result[i] += uint64((d.cols-1-i)<<4) ^ uint64((d.rounds-1-r)<<56)
+			c := (uint64(((d.cols - 1 - i) << 4) ^ r) << 56) | 0xF0F0F0F0F0F0F3
+			result[i] += c
 		}
 		result = d.subBytes(result)
 		result = d.shiftBytes(result)
@@ -254,7 +270,7 @@ func (d *Digest) subBytes(state []uint64) []uint64 {
 	return result
 }
 
-// shiftBytes виконує циклічний зсув рядків
+// shiftBytes виконує циклічний зсув рядків (праворуч)
 func (d *Digest) shiftBytes(state []uint64) []uint64 {
 	result := make([]uint64, d.cols)
 
@@ -269,7 +285,8 @@ func (d *Digest) shiftBytes(state []uint64) []uint64 {
 	for row := 0; row < 8; row++ {
 		shift := shifts[row]
 		for col := 0; col < d.cols; col++ {
-			srcCol := (col + shift) % d.cols
+			// Зсув праворуч: новий стовпець отримує значення зі старого стовпця (col - shift)
+			srcCol := (col + d.cols - shift) % d.cols
 			b := byte(state[srcCol] >> (row * 8))
 			result[col] |= uint64(b) << (row * 8)
 		}

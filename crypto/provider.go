@@ -44,6 +44,12 @@ func List() []string {
 	return names
 }
 
+// IsUACryptoSuite checks if suite ID is Ukrainian (ДСТУ-ПК 2026).
+// UA suites use range 0xD001-0xD0FF.
+func IsUACryptoSuite(suite uint16) bool {
+	return suite >= 0xD001 && suite <= 0xD0FF
+}
+
 // ParseProviderPriority extracts provider names from cipherSuites config.
 // Input examples: "cn,ru,us" or "cn,TLS_AES_128_GCM_SHA256,ru"
 // Returns list of valid provider names in order, or ["us"] if none found.
