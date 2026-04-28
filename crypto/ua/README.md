@@ -10,7 +10,7 @@
 - **Стійкість**: 256 біт (Category 5)
 
 ```go
-import "github.com/nativemind/https-vpn/crypto/ua/kupyna"
+import "github.com/vpnclient/https-vpn/crypto/ua/kupyna"
 
 hash := kupyna.Sum512([]byte("повідомлення"))
 ```
@@ -22,7 +22,7 @@ hash := kupyna.Sum512([]byte("повідомлення"))
 - **Режим**: GCM для аутентифікованого шифрування
 
 ```go
-import "github.com/nativemind/https-vpn/crypto/ua/kalyna"
+import "github.com/vpnclient/https-vpn/crypto/ua/kalyna"
 
 cipher, err := kalyna.NewCipher512(key)
 ```
@@ -60,8 +60,8 @@ cipher, err := kalyna.NewCipher512(key)
 
 ```go
 import (
-    "github.com/nativemind/https-vpn/crypto"
-    _ "github.com/nativemind/https-vpn/crypto/ua" // Реєстрація провайдера
+    "github.com/vpnclient/https-vpn/crypto"
+    _ "github.com/vpnclient/https-vpn/crypto/ua" // Реєстрація провайдера
 )
 
 provider, ok := crypto.Get("ua")
@@ -72,18 +72,21 @@ if ok {
 
 ## Статус реалізації
 
-| Компонент | Статус |
-|-----------|--------|
-| Купина-512 | Базова реалізація |
-| Калина-512 | Базова реалізація |
-| Мальва-1024 | В розробці |
-| Сокіл-512 | В розробці |
-| TLS провайдер | Реалізовано (fallback на AES) |
-| Гібридний KEM | В розробці |
+| Компонент | Статус | Тести |
+|-----------|--------|-------|
+| Купина-512 | Базова реалізація | Структура OK |
+| Калина-512 | Базова реалізація | Encrypt/Decrypt OK |
+| Мальва-1024 | Базова реалізація | KeyGen OK |
+| Сокіл-512 | Базова реалізація | KeyGen OK |
+| TLS провайдер | Реалізовано | 12/12 PASS |
+| Гібридний KEM | Очікує | - |
+
+**Примітка**: Постквантові алгоритми (Мальва, Сокіл) мають базову структуру.
+Для production використання потрібна повна реалізація NTT та тестові вектори.
 
 ## Ліцензія
 
-MIT License
+NativeMindNONC
 
 ## Посилання
 

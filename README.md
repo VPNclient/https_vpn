@@ -222,8 +222,6 @@ https-vpn/
 
 ## License
 
-[TBD]
+NativeMindNONC
 
-## Contributing
 
-[TBD]
