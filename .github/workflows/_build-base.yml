@@ -1,0 +1,136 @@
+name: Reusable Go Build
+
+on:
+  workflow_call:
+    inputs:
+      goos:
+        required: true
+        type: string
+        description: "Target OS (linux, windows, darwin, etc.)"
+      goarch:
+        required: true
+        type: string
+        description: "Target architecture (amd64, arm64, arm, etc.)"
+      goarm:
+        required: false
+        type: string
+        default: ""
+        description: "ARM version (5, 6, 7)"
+      gomips:
+        required: false
+        type: string
+        default: ""
+        description: "MIPS variant (softfloat, hardfloat)"
+      build_tags:
+        required: false
+        type: string
+        default: ""
+        description: "Go build tags (e.g., 'ua,sm')"
+      cgo_enabled:
+        required: false
+        type: string
+        default: "0"
+        description: "Enable CGO (0 or 1)"
+      artifact_name:
+        required: true
+        type: string
+        description: "Name for the artifact"
+      version:
+        required: true
+        type: string
+        description: "Version string (e.g., v1.0.0-build.42)"
+      runner:
+        required: false
+        type: string
+        default: "ubuntu-latest"
+        description: "GitHub runner to use"
+      binary_name:
+        required: false
+        type: string
+        default: "https-vpn"
+        description: "Output binary name"
+    outputs:
+      artifact_path:
+        description: "Path to built artifact"
+        value: ${{ jobs.build.outputs.artifact_path }}
+      build_success:
+        description: "Whether build succeeded"
+        value: ${{ jobs.build.outputs.build_success }}
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    outputs:
+      artifact_path: ${{ steps.build.outputs.artifact_path }}
+      build_success: ${{ steps.build.outputs.build_success }}
+    env:
+      GOOS: ${{ inputs.goos }}
+      GOARCH: ${{ inputs.goarch }}
+      GOARM: ${{ inputs.goarm }}
+      GOMIPS: ${{ inputs.gomips }}
+      CGO_ENABLED: ${{ inputs.cgo_enabled }}
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Get project dependencies
+        run: go mod download
+
+      - name: Build binary
+        id: build
+        run: |
+          mkdir -p build_assets
+
+          # Determine binary extension
+          BINARY_NAME="${{ inputs.binary_name }}"
+          if [[ "${{ inputs.goos }}" == "windows" ]]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+
+          # Build tags
+          BUILD_TAGS=""
+          if [[ -n "${{ inputs.build_tags }}" ]]; then
+            BUILD_TAGS="-tags ${{ inputs.build_tags }}"
+          fi
+
+          # Build
+          echo "Building ${BINARY_NAME} for ${{ inputs.goos }}/${{ inputs.goarch }}..."
+          go build -o "build_assets/${BINARY_NAME}" \
+            -trimpath \
+            -buildvcs=false \
+            -ldflags="-X main.Version=${{ inputs.version }} -s -w -buildid=" \
+            ${BUILD_TAGS} \
+            -v ./cmd/https-vpn
+
+          # Output
+          echo "artifact_path=build_assets/${BINARY_NAME}" >> $GITHUB_OUTPUT
+          echo "build_success=true" >> $GITHUB_OUTPUT
+
+      - name: Copy LICENSE and README
+        run: |
+          cp LICENSE build_assets/ || true
+          cp README.md build_assets/ || true
+
+      - name: Create archive
+        run: |
+          cd build_assets
+          if [[ "${{ inputs.goos }}" == "windows" ]]; then
+            zip -9r "../${{ inputs.artifact_name }}.zip" .
+          else
+            tar -czvf "../${{ inputs.artifact_name }}.tar.gz" .
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: |
+            ${{ inputs.artifact_name }}.zip
+            ${{ inputs.artifact_name }}.tar.gz
+          if-no-files-found: error

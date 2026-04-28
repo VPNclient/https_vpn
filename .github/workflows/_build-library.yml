@@ -1,0 +1,144 @@
+name: Reusable Library Build
+
+on:
+  workflow_call:
+    inputs:
+      goos:
+        required: true
+        type: string
+        description: "Target OS"
+      goarch:
+        required: true
+        type: string
+        description: "Target architecture"
+      goarm:
+        required: false
+        type: string
+        default: ""
+      library_type:
+        required: true
+        type: string
+        description: "Library type: static, shared, or both"
+      build_tags:
+        required: false
+        type: string
+        default: ""
+      version:
+        required: true
+        type: string
+      artifact_name:
+        required: true
+        type: string
+      runner:
+        required: false
+        type: string
+        default: "ubuntu-latest"
+    outputs:
+      static_lib_path:
+        description: "Path to static library (.a)"
+        value: ${{ jobs.build.outputs.static_lib_path }}
+      shared_lib_path:
+        description: "Path to shared library (.so/.dll/.dylib)"
+        value: ${{ jobs.build.outputs.shared_lib_path }}
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    outputs:
+      static_lib_path: ${{ steps.build.outputs.static_lib_path }}
+      shared_lib_path: ${{ steps.build.outputs.shared_lib_path }}
+    env:
+      GOOS: ${{ inputs.goos }}
+      GOARCH: ${{ inputs.goarch }}
+      GOARM: ${{ inputs.goarm }}
+      CGO_ENABLED: "1"
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Install cross-compilation tools
+        if: inputs.goos == 'linux' && inputs.goarch != 'amd64'
+        run: |
+          sudo apt-get update
+          case "${{ inputs.goarch }}" in
+            arm64)
+              sudo apt-get install -y gcc-aarch64-linux-gnu
+              echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+              ;;
+            arm)
+              sudo apt-get install -y gcc-arm-linux-gnueabihf
+              echo "CC=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
+              ;;
+          esac
+
+      - name: Get project dependencies
+        run: go mod download
+
+      - name: Determine library extensions
+        id: ext
+        run: |
+          case "${{ inputs.goos }}" in
+            windows)
+              echo "shared_ext=dll" >> $GITHUB_OUTPUT
+              echo "static_ext=lib" >> $GITHUB_OUTPUT
+              ;;
+            darwin)
+              echo "shared_ext=dylib" >> $GITHUB_OUTPUT
+              echo "static_ext=a" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "shared_ext=so" >> $GITHUB_OUTPUT
+              echo "static_ext=a" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Build libraries
+        id: build
+        run: |
+          mkdir -p build_assets
+
+          BUILD_TAGS=""
+          if [[ -n "${{ inputs.build_tags }}" ]]; then
+            BUILD_TAGS="-tags ${{ inputs.build_tags }}"
+          fi
+
+          LIB_NAME="libhttps-vpn"
+
+          # Build shared library
+          if [[ "${{ inputs.library_type }}" == "shared" || "${{ inputs.library_type }}" == "both" ]]; then
+            echo "Building shared library..."
+            go build -o "build_assets/${LIB_NAME}.${{ steps.ext.outputs.shared_ext }}" \
+              -buildmode=c-shared \
+              -trimpath \
+              -buildvcs=false \
+              -ldflags="-X main.Version=${{ inputs.version }} -s -w" \
+              ${BUILD_TAGS} \
+              ./core
+            echo "shared_lib_path=build_assets/${LIB_NAME}.${{ steps.ext.outputs.shared_ext }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Build static library
+          if [[ "${{ inputs.library_type }}" == "static" || "${{ inputs.library_type }}" == "both" ]]; then
+            echo "Building static library..."
+            go build -o "build_assets/${LIB_NAME}.${{ steps.ext.outputs.static_ext }}" \
+              -buildmode=c-archive \
+              -trimpath \
+              -buildvcs=false \
+              -ldflags="-X main.Version=${{ inputs.version }} -s -w" \
+              ${BUILD_TAGS} \
+              ./core
+            echo "static_lib_path=build_assets/${LIB_NAME}.${{ steps.ext.outputs.static_ext }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: build_assets/
+          if-no-files-found: error

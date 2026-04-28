@@ -1,0 +1,266 @@
+name: Reusable Package Build
+
+on:
+  workflow_call:
+    inputs:
+      package_type:
+        required: true
+        type: string
+        description: "Package type: deb, rpm, or ipk"
+      binary_artifact:
+        required: true
+        type: string
+        description: "Name of the artifact containing the binary"
+      version:
+        required: true
+        type: string
+        description: "Package version (without 'v' prefix)"
+      arch:
+        required: true
+        type: string
+        description: "Package architecture (amd64, arm64, etc.)"
+      artifact_name:
+        required: true
+        type: string
+        description: "Output artifact name"
+      package_name:
+        required: false
+        type: string
+        default: "https-vpn"
+      description:
+        required: false
+        type: string
+        default: "HTTPS VPN - Lightweight certification-ready VPN"
+      maintainer:
+        required: false
+        type: string
+        default: "NativeMind <noreply@nativemind.net>"
+    outputs:
+      package_path:
+        description: "Path to package file"
+        value: ${{ jobs.package.outputs.package_path }}
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    outputs:
+      package_path: ${{ steps.package.outputs.package_path }}
+    steps:
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.binary_artifact }}
+          path: binary/
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          case "${{ inputs.package_type }}" in
+            deb)
+              sudo apt-get install -y dpkg-dev
+              ;;
+            rpm)
+              sudo apt-get install -y rpm
+              ;;
+            ipk)
+              # OpenWRT ipk is just a tarball with control files
+              ;;
+          esac
+
+      - name: Extract binary
+        run: |
+          cd binary
+          if [[ -f "*.tar.gz" ]]; then
+            tar -xzf *.tar.gz
+          elif [[ -f "*.zip" ]]; then
+            unzip *.zip
+          fi
+          # Find the binary
+          BINARY=$(find . -name "https-vpn" -o -name "https-vpn.exe" | head -1)
+          if [[ -z "$BINARY" ]]; then
+            echo "Binary not found!"
+            exit 1
+          fi
+          cp "$BINARY" ../https-vpn
+          chmod +x ../https-vpn
+
+      - name: Create DEB package
+        if: inputs.package_type == 'deb'
+        id: deb
+        run: |
+          PKG_NAME="${{ inputs.package_name }}"
+          PKG_VERSION="${{ inputs.version }}"
+          PKG_ARCH="${{ inputs.arch }}"
+
+          # Map Go arch to Debian arch
+          case "$PKG_ARCH" in
+            amd64) DEB_ARCH="amd64" ;;
+            arm64) DEB_ARCH="arm64" ;;
+            arm) DEB_ARCH="armhf" ;;
+            386) DEB_ARCH="i386" ;;
+            *) DEB_ARCH="$PKG_ARCH" ;;
+          esac
+
+          # Create package structure
+          PKG_DIR="${PKG_NAME}_${PKG_VERSION}_${DEB_ARCH}"
+          mkdir -p "${PKG_DIR}/DEBIAN"
+          mkdir -p "${PKG_DIR}/usr/bin"
+          mkdir -p "${PKG_DIR}/etc/https-vpn"
+          mkdir -p "${PKG_DIR}/lib/systemd/system"
+
+          # Copy binary
+          cp https-vpn "${PKG_DIR}/usr/bin/"
+          chmod 755 "${PKG_DIR}/usr/bin/https-vpn"
+
+          # Create control file
+          cat > "${PKG_DIR}/DEBIAN/control" << EOF
+          Package: ${PKG_NAME}
+          Version: ${PKG_VERSION}
+          Section: net
+          Priority: optional
+          Architecture: ${DEB_ARCH}
+          Maintainer: ${{ inputs.maintainer }}
+          Description: ${{ inputs.description }}
+          EOF
+
+          # Create systemd service
+          cat > "${PKG_DIR}/lib/systemd/system/https-vpn.service" << EOF
+          [Unit]
+          Description=HTTPS VPN Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/https-vpn run -c /etc/https-vpn/config.json
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          # Create default config
+          cat > "${PKG_DIR}/etc/https-vpn/config.json.example" << EOF
+          {
+            "inbounds": [{
+              "port": 443,
+              "protocol": "https-vpn",
+              "settings": {}
+            }],
+            "outbounds": [{"protocol": "freedom"}]
+          }
+          EOF
+
+          # Build package
+          dpkg-deb --build "${PKG_DIR}"
+
+          echo "package_path=${PKG_DIR}.deb" >> $GITHUB_OUTPUT
+
+      - name: Create RPM package
+        if: inputs.package_type == 'rpm'
+        id: rpm
+        run: |
+          PKG_NAME="${{ inputs.package_name }}"
+          PKG_VERSION="${{ inputs.version }}"
+          PKG_ARCH="${{ inputs.arch }}"
+
+          # Map to RPM arch
+          case "$PKG_ARCH" in
+            amd64) RPM_ARCH="x86_64" ;;
+            arm64) RPM_ARCH="aarch64" ;;
+            arm) RPM_ARCH="armv7hl" ;;
+            386) RPM_ARCH="i686" ;;
+            *) RPM_ARCH="$PKG_ARCH" ;;
+          esac
+
+          # Create RPM build structure
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp https-vpn rpmbuild/SOURCES/
+
+          # Create spec file
+          cat > rpmbuild/SPECS/https-vpn.spec << EOF
+          Name: ${PKG_NAME}
+          Version: ${PKG_VERSION}
+          Release: 1
+          Summary: ${{ inputs.description }}
+          License: Proprietary
+
+          %description
+          ${{ inputs.description }}
+
+          %install
+          mkdir -p %{buildroot}/usr/bin
+          cp %{_sourcedir}/https-vpn %{buildroot}/usr/bin/
+          chmod 755 %{buildroot}/usr/bin/https-vpn
+
+          %files
+          /usr/bin/https-vpn
+          EOF
+
+          # Build RPM
+          rpmbuild -bb --target="${RPM_ARCH}" \
+            --define "_topdir $(pwd)/rpmbuild" \
+            rpmbuild/SPECS/https-vpn.spec
+
+          RPM_FILE=$(find rpmbuild/RPMS -name "*.rpm" | head -1)
+          cp "$RPM_FILE" ./
+
+          echo "package_path=$(basename $RPM_FILE)" >> $GITHUB_OUTPUT
+
+      - name: Create IPK package
+        if: inputs.package_type == 'ipk'
+        id: ipk
+        run: |
+          PKG_NAME="${{ inputs.package_name }}"
+          PKG_VERSION="${{ inputs.version }}"
+          PKG_ARCH="${{ inputs.arch }}"
+
+          # Create package structure
+          mkdir -p ipk/data/usr/bin
+          mkdir -p ipk/control
+
+          cp https-vpn ipk/data/usr/bin/
+          chmod 755 ipk/data/usr/bin/https-vpn
+
+          # Control file
+          cat > ipk/control/control << EOF
+          Package: ${PKG_NAME}
+          Version: ${PKG_VERSION}
+          Architecture: ${PKG_ARCH}
+          Maintainer: ${{ inputs.maintainer }}
+          Description: ${{ inputs.description }}
+          EOF
+
+          # Create data.tar.gz
+          cd ipk/data && tar -czvf ../data.tar.gz . && cd ../..
+
+          # Create control.tar.gz
+          cd ipk/control && tar -czvf ../control.tar.gz . && cd ../..
+
+          # Create debian-binary
+          echo "2.0" > ipk/debian-binary
+
+          # Create ipk (ar archive)
+          cd ipk && ar -r "../${PKG_NAME}_${PKG_VERSION}_${PKG_ARCH}.ipk" \
+            debian-binary control.tar.gz data.tar.gz && cd ..
+
+          echo "package_path=${PKG_NAME}_${PKG_VERSION}_${PKG_ARCH}.ipk" >> $GITHUB_OUTPUT
+
+      - name: Set output
+        id: package
+        run: |
+          case "${{ inputs.package_type }}" in
+            deb) echo "package_path=${{ steps.deb.outputs.package_path }}" >> $GITHUB_OUTPUT ;;
+            rpm) echo "package_path=${{ steps.rpm.outputs.package_path }}" >> $GITHUB_OUTPUT ;;
+            ipk) echo "package_path=${{ steps.ipk.outputs.package_path }}" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: |
+            *.deb
+            *.rpm
+            *.ipk
+          if-no-files-found: error
