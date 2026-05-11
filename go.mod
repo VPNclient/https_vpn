@@ -1,4 +1,4 @@
-module github.com/nativemind/https-vpn
+module github.com/vpnclient/https-vpn
 
 go 1.25.0
 
