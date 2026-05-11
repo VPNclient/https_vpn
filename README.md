@@ -21,10 +21,10 @@ A lightweight, certification-ready VPN that uses standard HTTP/2 CONNECT over TL
 │  (xray-compat)      │  (Go stdlib)       │                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │                    Crypto Provider Interface                        │
-├────────────┬────────────┬────────────┬────────────┬────────────────┤
-│  US (AES)  │  CN (SM)   │  UA (ДСТУ) │  FR (ANSSI)│  UK (NCSC)     │
-│  stdlib    │  SM2/3/4   │  PQ-ready  │  certified │  compliant     │
-└────────────┴────────────┴────────────┴────────────┴────────────────┘
+├────────────┬────────────┬────────────┬────────────┬────────────┬──────┤
+│  US (AES)  │  CN (SM)   │  UA (ДСТУ) │  TH (PQC)  │  FR (ANSSI)│UK (NCS│
+│  stdlib    │  SM2/3/4   │  PQ-ready  │ FIPS 203/4 │  certified │ compl│
+└────────────┴────────────┴────────────┴────────────┴────────────┴──────┘
 ```
 
 ## Traffic Pattern
@@ -42,6 +42,7 @@ AI-based DPI cannot distinguish HTTPS VPN traffic from regular browser traffic b
 | Country | Regulatory Body | Signature | Hash | Cipher | Status |
 |---------|-----------------|-----------|------|--------|--------|
 | 🇺🇸 USA | NIST | ECDSA / EdDSA | SHA-2 / SHA-3 | AES | ✅ |
+| 🇹🇭 Thailand | NIST / ETDA | ML-DSA (FIPS 204) | SHA-3 | AES / ML-KEM | ✅ |
 | 🇨🇳 China | State Cryptography Administration | SM2 | SM3 | SM4, SM9 | ✅ |
 | 🇺🇦 Ukraine | ДСТУ | Сокіл (Sokil) | Купина (Kupyna) | Калина (Kalyna) | ✅ |
 | 🇷🇺 Russia | FSB | GOST R 34.10 | Streebog | Kuznyechik | 🔄 |
@@ -61,8 +62,11 @@ Legend: ✅ Implemented | 🔄 In Progress | 📋 Planned
 
 | Country | Standard | KEM | Signature | Security Level |
 |---------|----------|-----|-----------|----------------|
+| 🇹🇭 Thailand | TH-PQC (Hybrid) | ML-KEM-768/1024 | ML-DSA-65 | Category 3-5 |
 | 🇺🇦 Ukraine | ДСТУ-ПК 2026 | Мальва (Malva) | Сокіл (Sokil) | Category 5 (256-bit) |
 | 🇺🇸 USA | NIST FIPS 203/204 | ML-KEM | ML-DSA | Category 5 |
+
+Thai post-quantum stack (TH-PQC) uses NIST-finalized standards (FIPS 203, 204, 205) in hybrid mode with classical ECC for balanced performance and high security.
 
 Ukrainian post-quantum algorithms are based on lattice cryptography (Module-LWE/SIS), providing resistance against quantum computer attacks.
 
@@ -125,6 +129,9 @@ Compatible with management panels: **3x-ui**, **Marzban**, and xray-based applic
 # Generate config (US crypto - default)
 https-vpn init --crypto us
 
+# Generate config (Thai post-quantum)
+https-vpn init --crypto th
+
 # Generate config (Ukrainian post-quantum)
 https-vpn init --crypto ua
 
@@ -146,12 +153,12 @@ Local SOCKS5 proxy available at `127.0.0.1:1080`.
 ```json
 {
   "tlsSettings": {
-    "cipherSuites": "ua"
+    "cipherSuites": "ua,th"
   }
 }
 ```
 
-Available providers: `us`, `cn`, `ua`, `fr`, `uk`
+Available providers: `us`, `cn`, `ua`, `th`, `fr`, `uk`
 
 ## Building
 
@@ -159,17 +166,20 @@ Available providers: `us`, `cn`, `ua`, `fr`, `uk`
 # Default (US crypto - Go stdlib)
 go build -o https-vpn ./cmd/https-vpn
 
-# With GOST support (Russia)
-go build -tags gost -o https-vpn ./cmd/https-vpn
+# With Thai PQC support
+go build -tags th -o https-vpn ./cmd/https-vpn
+
+# With UA support (Ukraine, post-quantum)
+go build -tags ua -o https-vpn ./cmd/https-vpn
 
 # With SM support (China)
 go build -tags sm -o https-vpn ./cmd/https-vpn
 
+# With GOST support (Russia)
+go build -tags gost -o https-vpn ./cmd/https-vpn
+
 # With UK support (NCSC)
 go build -tags uk -o https-vpn ./cmd/https-vpn
-
-# With UA support (Ukraine, post-quantum)
-go build -tags ua -o https-vpn ./cmd/https-vpn
 
 # With FR support (France, ANSSI)
 go build -tags fr -o https-vpn ./cmd/https-vpn
@@ -183,14 +193,14 @@ https-vpn/
 ├── transport/            # HTTP/2 CONNECT implementation
 ├── crypto/               # Crypto provider interface
 │   ├── us/               # NIST (Go stdlib)
-│   ├── ru/               # GOST provider
+│   ├── th/               # Thai PQC provider (FIPS 203, 204, 205)
 │   ├── cn/               # SM provider (SM2/SM3/SM4/SM9)
 │   ├── uk/               # NCSC provider
 │   ├── fr/               # ANSSI provider
 │   └── ua/               # ДСТУ provider (post-quantum)
 │       ├── kupyna/       # Купина-512 hash
 │       ├── kalyna/       # Калина-512 cipher
-│       ├── malva/        # Мальва-1024 KEM
+│       ├── malva/        # Маล์วา-1024 KEM
 │       ├── sokil/        # Сокіл-512 signature
 │       └── tls/          # TLS cipher suites
 ├── infra/conf/           # Config parsing (xray-compatible)
@@ -215,10 +225,12 @@ https-vpn/
 
 | Provider | Documentation | Standards |
 |----------|---------------|-----------|
+| TH (Thailand) | [flows/sdd-https-vpn-ciphersuite-th/README.md](flows/sdd-https-vpn-ciphersuite-th/README.md) | FIPS 203, 204, 205 (ML-KEM, ML-DSA, SLH-DSA) |
 | UA (Ukraine) | [crypto/ua/README.md](crypto/ua/README.md) | ДСТУ 7564, ДСТУ 7624, ДСТУ-ПК 2026 |
 | CN (China) | [crypto/cn/README.md](crypto/cn/README.md) | GB/T 32918, GB/T 32905, GB/T 32907 |
 | FR (France) | [crypto/fr/README.md](crypto/fr/README.md) | ANSSI RGS |
 | UK (Britain) | [crypto/uk/README.md](crypto/uk/README.md) | NCSC Guidelines |
+
 
 ## License
 
