@@ -89,6 +89,7 @@ Full index with metadata, tags, and relationships: `flows/adr-index.md`
 | `sdd-https-vpn-ciphersuite-cn` | `flows/sdd-https-vpn-ciphersuite-cn/_status.md` | IMPLEMENTATION (SM9 deferred) |
 | `sdd-https-vpn-multi-cert` | `flows/sdd-https-vpn-multi-cert/_status.md` | REQUIREMENTS (drafting) |
 | `sdd-https-vpn-ciphersuite-ua` | `flows/sdd-https-vpn-ciphersuite-ua/_status.md` | IMPLEMENTATION (базова реалізація завершена) |
+| `sdd-h2-cli-release` | `flows/sdd-h2-cli-release/_status.md` | IMPLEMENTATION (script ready) |
 
 ### DDD Flows (Document-Driven)
 
